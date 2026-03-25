@@ -1,7 +1,8 @@
 matplotlib==3.6.2
 numpy==1.23.5
 pandas==1.5.3
-pvlib==0.9.3
+pvlib==1.10.5
+scipy==1.14.1
 seaborn==0.12.2
 streamlit==1.40.2
 lxml==4.9.1
