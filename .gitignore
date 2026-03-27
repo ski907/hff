@@ -1,2 +1,12 @@
 # .gitignore
 __pycache__/
+*.pyc
+
+# Frontend build artifacts and dependencies
+frontend/node_modules/
+frontend/build/
+frontend/.svelte-kit/
+
+# Backend: compiled frontend served as static files
+backend/static/
+backend/__pycache__/
