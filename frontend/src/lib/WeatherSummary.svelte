@@ -1,9 +1,8 @@
 <script>
   import { onMount } from 'svelte';
 
-  export let data; // forecast JSON from /api/forecast
+  export let data;
 
-  // ── Responsive width ──────────────────────────────────────────────────────
   let containerEl;
   let width = 920;
 
@@ -15,7 +14,6 @@
     return () => obs.disconnect();
   });
 
-  // ── Layout constants ──────────────────────────────────────────────────────
   const H = 530;
   const pad = { top: 30, right: 28, bottom: 92, left: 52 };
 
@@ -33,7 +31,55 @@
   $: popY0  = windY0 + windH + gap * 2;
   $: skyY0  = popY0 + popH + gap;
 
-  // ── Parse incoming data ───────────────────────────────────────────────────
+  // ── Temperature bands (NWS heat/cold stress thresholds) ──────────────────
+  const tempBands = [
+    { max:   0, color: '#1a4a8a' },  // extreme cold
+    { max:  32, color: '#4a90d9' },  // freezing
+    { max:  60, color: '#38ada9' },  // cold/cool
+    { max:  85, color: '#2d7a2d' },  // comfortable
+    { max:  99, color: '#c9870a' },  // hot
+    { max: 114, color: '#d4591a' },  // dangerous heat
+    { max: Infinity, color: '#c93030' }, // extreme heat
+  ];
+
+  function tempColor(f) {
+    if (f == null) return '#8b949e';
+    for (const b of tempBands) {
+      if (f <= b.max) return b.color;
+    }
+    return tempBands[tempBands.length - 1].color;
+  }
+
+  function tempLabel(f) {
+    if (f == null) return '—';
+    if (f <= 0)   return 'Extreme cold';
+    if (f <= 32)  return 'Freezing';
+    if (f <= 60)  return 'Cold/cool';
+    if (f <= 85)  return 'Comfortable';
+    if (f <= 99)  return 'Hot';
+    if (f <= 114) return 'Dangerous heat';
+    return 'Extreme heat';
+  }
+
+  // ── Beaufort scale (mph breakpoints) ─────────────────────────────────────
+  const WIND_MAX = 75;
+  const beaufortBands = [
+    { min: 0,  max: 12,  label: 'B0–3',  color: '#2d7a2d',   fill: '#2d7a2d22' },
+    { min: 12, max: 24,  label: 'B4–5',  color: '#c9870a',   fill: '#c9870a22' },
+    { min: 24, max: 38,  label: 'B6–7',  color: '#d4591a',   fill: '#d4591a22' },
+    { min: 38, max: 54,  label: 'B8–9',  color: '#c93030',   fill: '#c9303022' },
+    { min: 54, max: 75,  label: 'B10+',  color: '#8030c0',   fill: '#8030c022' },
+  ];
+
+  function windColor(mph) {
+    for (const b of beaufortBands) {
+      if (mph <= b.max) return b.color;
+    }
+    return beaufortBands[beaufortBands.length - 1].color;
+  }
+
+  const windTicks = [0, 12, 24, 38, 54, 75];
+
   function parseData(d) {
     return d.timestamps.map((t, i) => ({
       time:     new Date(t),
@@ -49,7 +95,6 @@
 
   $: points = data ? parseData(data) : [];
 
-  // ── Scales ────────────────────────────────────────────────────────────────
   $: xScale = (i) => pad.left + (i / Math.max(points.length - 1, 1)) * plotW;
 
   $: tempMin = points.length
@@ -60,14 +105,10 @@
     : 100;
   $: yTemp = (v) => tempY0 + tempH * (1 - (v - tempMin) / (tempMax - tempMin));
 
-  $: windMax = points.length
-    ? Math.ceil(Math.max(...points.map((p) => p.wind ?? 0), 5) / 5) * 5 + 2
-    : 30;
-  $: yWind = (v) => windY0 + windH * (1 - v / windMax);
+  $: yWind = (v) => windY0 + windH * (1 - Math.min(v, WIND_MAX) / WIND_MAX);
 
   $: yPop = (v) => popY0 + popH * (1 - v / 100);
 
-  // ── Path builders ─────────────────────────────────────────────────────────
   function linePath(pts, xFn, yFn) {
     let d = '';
     let started = false;
@@ -81,7 +122,6 @@
     return d;
   }
 
-  $: tempLine = linePath(points, xScale, (p) => p.temp    != null ? yTemp(p.temp)    : null);
   $: dewLine  = linePath(points, xScale, (p) => p.dewpoint != null ? yTemp(p.dewpoint) : null);
 
   $: spreadPath = (() => {
@@ -95,12 +135,37 @@
     return fwd + ' ' + rev + ' Z';
   })();
 
-  $: windLine = linePath(points, xScale, (p) => p.wind != null ? yWind(p.wind) : null);
-  $: windArea = points.length
-    ? windLine + ` L${xScale(points.length - 1).toFixed(1)},${yWind(0).toFixed(1)} L${xScale(0).toFixed(1)},${yWind(0).toFixed(1)} Z`
-    : '';
+  // Segmented temperature line
+  $: tempSegments = (() => {
+    if (points.length < 2) return [];
+    const segs = [];
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[i], p1 = points[i + 1];
+      if (p0.temp == null || p1.temp == null) continue;
+      const midTemp = (p0.temp + p1.temp) / 2;
+      segs.push({ i, color: tempColor(midTemp) });
+    }
+    return segs;
+  })();
 
-  // ── Day/night bands ───────────────────────────────────────────────────────
+  $: windLine = linePath(points, xScale, (p) => p.wind != null ? yWind(p.wind) : null);
+
+  $: windSegments = (() => {
+    if (points.length < 2) return [];
+    const segs = [];
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[i], p1 = points[i + 1];
+      if (p0.wind == null || p1.wind == null) continue;
+      const maxSpd = Math.max(p0.wind, p1.wind);
+      const color = windColor(maxSpd);
+      const x0 = xScale(i).toFixed(1), x1 = xScale(i + 1).toFixed(1);
+      const y0t = yWind(p0.wind).toFixed(1), y1t = yWind(p1.wind).toFixed(1);
+      const yb = yWind(0).toFixed(1);
+      segs.push({ path: `M${x0},${y0t} L${x1},${y1t} L${x1},${yb} L${x0},${yb} Z`, color });
+    }
+    return segs;
+  })();
+
   $: dayNightBands = (() => {
     if (!points.length) return [];
     const bands = [];
@@ -115,7 +180,6 @@
     return bands;
   })();
 
-  // ── Day boundary indices (for date labels & vertical lines) ───────────────
   $: dayBounds = (() => {
     const b = [0];
     for (let i = 1; i < points.length; i++) {
@@ -124,7 +188,6 @@
     return b;
   })();
 
-  // ── Ticks ─────────────────────────────────────────────────────────────────
   $: xTicks = (() => {
     const t = [];
     for (let i = 0; i < points.length; i++) {
@@ -137,13 +200,7 @@
     for (let v = Math.ceil(tempMin / 5) * 5; v <= tempMax; v += 5) t.push(v);
     return t;
   })();
-  $: windTicks = (() => {
-    const t = [];
-    for (let v = 0; v <= windMax; v += 5) t.push(v);
-    return t;
-  })();
 
-  // ── Hover ─────────────────────────────────────────────────────────────────
   let hoverIdx = null;
 
   function handleMouseMove(e) {
@@ -153,7 +210,6 @@
     hoverIdx = Math.max(0, Math.min(points.length - 1, Math.round((relX / plotW) * (points.length - 1))));
   }
 
-  // ── Arrow helper ──────────────────────────────────────────────────────────
   function windArrow(cx, cy, dir) {
     const rad = ((dir + 180) * Math.PI) / 180;
     const len = 14, headLen = 4, headW = 2.5;
@@ -168,7 +224,6 @@
     };
   }
 
-  // ── Formatters ────────────────────────────────────────────────────────────
   function dirLabel(deg) {
     if (deg == null) return '—';
     const d = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
@@ -182,7 +237,22 @@
     return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   }
 
-  // ── Tooltip positioning ───────────────────────────────────────────────────
+  function beaufortLabel(mph) {
+    if (mph == null) return '—';
+    if (mph < 1)  return 'Calm (B0)';
+    if (mph < 8)  return 'Light (B1–2)';
+    if (mph < 13) return 'Gentle (B3)';
+    if (mph < 18) return 'Moderate (B4)';
+    if (mph < 24) return 'Fresh (B5)';
+    if (mph < 31) return 'Strong (B6)';
+    if (mph < 38) return 'Near gale (B7)';
+    if (mph < 46) return 'Gale (B8)';
+    if (mph < 54) return 'Severe (B9)';
+    if (mph < 63) return 'Storm (B10)';
+    if (mph < 73) return 'Violent (B11)';
+    return 'Hurricane (B12)';
+  }
+
   $: tipX = hoverIdx != null ? xScale(hoverIdx) : 0;
   $: tipFlipLeft = tipX > pad.left + plotW * 0.68;
 </script>
@@ -203,25 +273,14 @@
       on:mouseleave={() => (hoverIdx = null)}
       style="display:block; cursor:crosshair;"
     >
-      <defs>
-        <linearGradient id="ws-tGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#f47067" stop-opacity="0.18" />
-          <stop offset="100%" stop-color="#f47067" stop-opacity="0.02" />
-        </linearGradient>
-        <linearGradient id="ws-wGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#79c0ff" stop-opacity="0.15" />
-          <stop offset="100%" stop-color="#79c0ff" stop-opacity="0.01" />
-        </linearGradient>
-      </defs>
-
       <!-- ── Day/night bands ── -->
-      {#each dayNightBands as b}
+<!--       {#each dayNightBands as b}
         <rect
           x={xScale(b.from)} y={tempY0}
           width={xScale(b.to) - xScale(b.from)} height={tempH}
           fill={b.isDay ? '#e3b34112' : '#0d111708'}
         />
-      {/each}
+      {/each} -->
 
       <!-- ── Temperature section ── -->
       {#each tempTicks as v}
@@ -232,20 +291,28 @@
         transform={`translate(13,${tempY0 + tempH / 2}) rotate(-90)`}
         text-anchor="middle" fill="#7d8590" font-size="9" font-family="'IBM Plex Mono',monospace">°F</text>
 
-      <!-- Spread fill between temp and dewpoint -->
-      <path d={spreadPath} fill="#f4706710" />
+      <!-- Spread fill (neutral) -->
+      <path d={spreadPath} fill="#ffffff08" />
 
       <!-- Dewpoint dashed line -->
       <path d={dewLine} fill="none" stroke="#8b949e" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.6" />
 
-      <!-- Temperature line -->
-      <path d={tempLine} fill="none" stroke="#f47067" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+      <!-- Segmented temperature line -->
+      {#each tempSegments as seg}
+        {@const p0 = points[seg.i]}
+        {@const p1 = points[seg.i + 1]}
+        <line
+          x1={xScale(seg.i)} y1={yTemp(p0.temp)}
+          x2={xScale(seg.i + 1)} y2={yTemp(p1.temp)}
+          stroke={seg.color}
+          stroke-width="2.5"
+          stroke-linecap="round"
+        />
+      {/each}
 
-      <!-- Section labels -->
-      <text x={pad.left + 6} y={tempY0 + 14} fill="#f47067" font-size="9.5" font-family="'IBM Plex Mono',monospace" font-weight="500" opacity="0.85">TEMP</text>
+      <text x={pad.left + 6} y={tempY0 + 14} fill="#8b949e" font-size="9.5" font-family="'IBM Plex Mono',monospace" font-weight="500" opacity="0.85">TEMP</text>
       <text x={pad.left + 48} y={tempY0 + 14} fill="#8b949e" font-size="9.5" font-family="'IBM Plex Mono',monospace" opacity="0.6">DEW</text>
 
-      <!-- 32°F freezing line -->
       {#if tempMin <= 32 && tempMax >= 32}
         <line x1={pad.left} x2={pad.left + plotW} y1={yTemp(32)} y2={yTemp(32)} stroke="#79c0ff" stroke-width="0.8" stroke-dasharray="6,4" opacity="0.35" />
         <text x={pad.left + plotW + 4} y={yTemp(32) + 3} fill="#79c0ff" font-size="8" opacity="0.5" font-family="'IBM Plex Mono',monospace">32°</text>
@@ -253,27 +320,62 @@
 
       <!-- ── Wind section ── -->
       <rect x={pad.left} y={windY0} width={plotW} height={windH} fill="#0d111706" rx="2" />
-      {#each windTicks as v}
-        <line x1={pad.left} x2={pad.left + plotW} y1={yWind(v)} y2={yWind(v)} stroke="#21262d" stroke-width="0.5" />
-      {/each}
-      <text x={pad.left - 8} y={yWind(windMax) + 3.5} text-anchor="end" fill="#484f58" font-size="9" font-family="'IBM Plex Mono',monospace">{windMax}</text>
-      <text x={pad.left - 8} y={yWind(0) + 3.5} text-anchor="end" fill="#484f58" font-size="9" font-family="'IBM Plex Mono',monospace">0</text>
 
-      <path d={windArea} fill="url(#ws-wGrad)" />
-      <path d={windLine} fill="none" stroke="#79c0ff" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" />
+      <!-- Beaufort horizontal band backgrounds -->
+      {#each beaufortBands as band}
+        {@const y1 = yWind(band.max)}
+        {@const y2 = yWind(band.min)}
+        <rect
+          x={pad.left} y={y1}
+          width={plotW} height={y2 - y1}
+          fill={band.fill}
+        />
+      {/each}
+
+      <!-- Beaufort tick lines and labels -->
+      {#each windTicks as v}
+        <line x1={pad.left} x2={pad.left + plotW} y1={yWind(v)} y2={yWind(v)} stroke="#30363d" stroke-width={v === 0 ? 0.5 : 0.8} stroke-dasharray={v === 0 ? '' : '3,3'} />
+        <text x={pad.left - 8} y={yWind(v) + 3.5} text-anchor="end" fill="#484f58" font-size="8.5" font-family="'IBM Plex Mono',monospace">{v}</text>
+      {/each}
+
+      <!-- Beaufort band labels on right edge -->
+      {#each beaufortBands as band}
+        {@const midY = (yWind(band.min) + yWind(band.max)) / 2}
+        <text x={pad.left + plotW + 3} y={midY + 3.5} fill={band.color} font-size="7.5" font-family="'IBM Plex Mono',monospace" opacity="0.7">{band.label}</text>
+      {/each}
+
+      <!-- Segmented wind area fill (Beaufort-colored) -->
+      {#each windSegments as seg}
+        <path d={seg.path} fill={seg.color} opacity="0.22" />
+      {/each}
+
+      <!-- Wind line — colored by current speed -->
+      {#each windSegments as seg, i}
+        {@const p0 = points[i]}
+        {@const p1 = points[i + 1]}
+        {#if p0?.wind != null && p1?.wind != null}
+          <line
+            x1={xScale(i)} y1={yWind(p0.wind)}
+            x2={xScale(i + 1)} y2={yWind(p1.wind)}
+            stroke={windColor(Math.max(p0.wind, p1.wind))}
+            stroke-width="2"
+            stroke-linecap="round"
+          />
+        {/if}
+      {/each}
 
       <!-- Wind direction arrows every 6 hours -->
       {#each points as p, i}
         {#if i % 6 === 0 && p.windDir != null && p.wind != null}
           {@const arr = windArrow(xScale(i), yWind(p.wind), p.windDir)}
-          <g opacity="0.75">
+          <g opacity="0.8">
             <line x1={arr.x1} y1={arr.y1} x2={arr.x2} y2={arr.y2} stroke="#c9d1d9" stroke-width="1.6" stroke-linecap="round" />
             <polygon points={arr.head} fill="#c9d1d9" />
           </g>
         {/if}
       {/each}
 
-      <text x={pad.left + 6} y={windY0 + 12} fill="#79c0ff" font-size="9.5" font-family="'IBM Plex Mono',monospace" font-weight="500" opacity="0.85">WIND mph</text>
+      <text x={pad.left + 6} y={windY0 + 12} fill="#7d8590" font-size="9.5" font-family="'IBM Plex Mono',monospace" font-weight="500" opacity="0.85">WIND mph · Beaufort</text>
 
       <!-- ── Precip probability bars ── -->
       <rect x={pad.left} y={popY0} width={plotW} height={popH} fill="#0d111706" rx="2" />
@@ -310,14 +412,13 @@
         SKY ◻ clear → ◼ overcast
       </text>
 
-      <!-- ── X axis: hour labels ── -->
+      <!-- ── X axis ── -->
       {#each xTicks as i}
         <text x={xScale(i)} y={skyY0 + skyH + 28} text-anchor="middle" fill="#484f58" font-size="9" font-family="'IBM Plex Mono',monospace">
           {fmtHr(points[i].time)}
         </text>
       {/each}
 
-      <!-- Date labels centred between day boundaries -->
       {#each dayBounds as startIdx, di}
         {@const endIdx = di < dayBounds.length - 1 ? dayBounds[di + 1] : points.length - 1}
         {@const midX = (xScale(startIdx) + xScale(endIdx)) / 2}
@@ -326,22 +427,21 @@
         </text>
       {/each}
 
-      <!-- Day boundary vertical lines -->
       {#each dayBounds.slice(1) as i}
-        <line x1={xScale(i)} x2={xScale(i)} y1={pad.top} y2={skyY0 + skyH} stroke="#30363d" stroke-width="0.8" stroke-dasharray="3,4" />
+        <line x1={xScale(i)} x2={xScale(i)} y1={pad.top} y2={skyY0 + skyH} stroke="#717375" stroke-width="2.0" stroke-dasharray="3,4" />
       {/each}
 
       <!-- ── Hover crosshair ── -->
       {#if hoverIdx != null}
         <line x1={xScale(hoverIdx)} x2={xScale(hoverIdx)} y1={tempY0} y2={skyY0 + skyH} stroke="#e6edf3" stroke-width="0.7" opacity="0.22" />
         {#if points[hoverIdx].temp != null}
-          <circle cx={xScale(hoverIdx)} cy={yTemp(points[hoverIdx].temp)} r="4" fill="#0f1318" stroke="#f47067" stroke-width="2" />
+          <circle cx={xScale(hoverIdx)} cy={yTemp(points[hoverIdx].temp)} r="4" fill="#0f1318" stroke={tempColor(points[hoverIdx].temp)} stroke-width="2" />
         {/if}
         {#if points[hoverIdx].dewpoint != null}
           <circle cx={xScale(hoverIdx)} cy={yTemp(points[hoverIdx].dewpoint)} r="3" fill="#0f1318" stroke="#8b949e" stroke-width="1.5" />
         {/if}
         {#if points[hoverIdx].wind != null}
-          <circle cx={xScale(hoverIdx)} cy={yWind(points[hoverIdx].wind)} r="3" fill="#0f1318" stroke="#79c0ff" stroke-width="1.5" />
+          <circle cx={xScale(hoverIdx)} cy={yWind(points[hoverIdx].wind)} r="3" fill="#0f1318" stroke={windColor(points[hoverIdx].wind)} stroke-width="1.5" />
         {/if}
       {/if}
     </svg>
@@ -357,12 +457,16 @@
       >
         <div class="tt-time">{fmtDate(p.time)} {p.time.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</div>
         <div class="tt-grid">
-          <span class="tt-label" style="color:#f47067">Temp</span>
-          <span class="tt-val">{p.temp != null ? p.temp + '°F' : '—'}</span>
+          <span class="tt-label" style="color:{tempColor(p.temp)}">Temp</span>
+          <span class="tt-val" style="color:{tempColor(p.temp)}">{p.temp != null ? p.temp + '°F' : '—'}</span>
+          <span class="tt-label" style="color:#484f58">↳</span>
+          <span class="tt-val" style="color:#7d8590;font-size:10px">{tempLabel(p.temp)}</span>
           <span class="tt-label" style="color:#8b949e">Dew</span>
           <span class="tt-val">{p.dewpoint != null ? p.dewpoint + '°F' : '—'}</span>
-          <span class="tt-label" style="color:#79c0ff">Wind</span>
-          <span class="tt-val">{p.wind != null ? p.wind + ' mph' : '—'} {dirLabel(p.windDir)}</span>
+          <span class="tt-label" style="color:{windColor(p.wind)}">Wind</span>
+          <span class="tt-val" style="color:{windColor(p.wind)}">{p.wind != null ? p.wind + ' mph' : '—'} {dirLabel(p.windDir)}</span>
+          <span class="tt-label" style="color:#484f58">↳</span>
+          <span class="tt-val" style="color:#7d8590;font-size:10px">{beaufortLabel(p.wind)}</span>
           <span class="tt-label" style="color:#7d8590">Sky</span>
           <span class="tt-val">{p.sky != null ? p.sky + '%' : '—'}</span>
           <span class="tt-label" style="color:#38ada9">Precip</span>
@@ -374,9 +478,29 @@
 
   <!-- ── Legend ── -->
   <div class="legend">
-    <span class="leg-item"><span class="leg-line" style="background:#f47067"></span><span class="leg-text">Temperature</span></span>
+    <span class="leg-item">
+      <span style="display:inline-flex;gap:2px">
+        <span class="leg-line" style="background:#1a4a8a"></span>
+        <span class="leg-line" style="background:#4a90d9"></span>
+        <span class="leg-line" style="background:#38ada9"></span>
+        <span class="leg-line" style="background:#2d7a2d"></span>
+        <span class="leg-line" style="background:#c9870a"></span>
+        <span class="leg-line" style="background:#d4591a"></span>
+        <span class="leg-line" style="background:#c93030"></span>
+      </span>
+      <span class="leg-text">Temp (cold→comfortable→heat)</span>
+    </span>
     <span class="leg-item"><span class="leg-dash"></span><span class="leg-text">Dewpoint</span></span>
-    <span class="leg-item"><span class="leg-line" style="background:#79c0ff"></span><span class="leg-text">Wind speed</span></span>
+    <span class="leg-item">
+      <span style="display:inline-flex;gap:2px">
+        <span class="leg-line" style="background:#2d7a2d"></span>
+        <span class="leg-line" style="background:#c9870a"></span>
+        <span class="leg-line" style="background:#d4591a"></span>
+        <span class="leg-line" style="background:#c93030"></span>
+        <span class="leg-line" style="background:#8030c0"></span>
+      </span>
+      <span class="leg-text">Wind (Beaufort: calm→storm)</span>
+    </span>
     <span class="leg-item"><span class="leg-bar" style="background:#38ada9"></span><span class="leg-text">Precip prob</span></span>
     <span class="leg-item"><span class="leg-strip"></span><span class="leg-text">Sky cover</span></span>
     <span class="leg-item"><span class="leg-day"></span><span class="leg-text">Daylight</span></span>
