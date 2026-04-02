@@ -134,7 +134,7 @@
   <div class="chart-header">
     <div class="chart-label">Forecast</div>
     <h2 class="chart-title">Wind Speed &amp; Direction</h2>
-    <p class="chart-sub">Arrows show direction wind is blowing from</p>
+    <p class="chart-sub">Arrows point toward wind origin (S arrow = wind from south)</p>
   </div>
 
   <div class="chart-panel" bind:this={containerEl}>
@@ -251,7 +251,7 @@
           <rect x="2" y="5.5" width="9" height="3" rx="0.5" fill="#e6edf3" opacity="0.9" />
           <polygon points="16,7 11,3 11,11" fill="#e6edf3" opacity="0.9" />
         </svg>
-        <span class="leg-text">Direction (from)</span>
+        <span class="leg-text">Origin direction</span>
       </span>
     {/if}
   </div>

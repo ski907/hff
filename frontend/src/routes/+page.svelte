@@ -67,12 +67,12 @@
   <section class="card controls-card">
     <div class="controls">
       <div class="control-group">
-        <label>Water Temperature (°C)</label>
-        <input type="number" bind:value={waterTemp} step="0.5" min="-5" max="40" />
+        <label for="water-temp">Water Temperature (°C)</label>
+        <input id="water-temp" type="number" bind:value={waterTemp} step="0.5" min="-5" max="40" />
       </div>
       <div class="control-group">
-        <label>Characteristic Depth (m)</label>
-        <input type="number" bind:value={depth} step="0.5" min="0.1" max="100" />
+        <label for="depth">Characteristic Depth (m)</label>
+        <input id="depth" type="number" bind:value={depth} step="0.5" min="0.1" max="100" />
       </div>
       <div class="control-group btn-group">
         <button class="compute-btn" on:click={compute} disabled={loading}>

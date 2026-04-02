@@ -10,6 +10,19 @@ import pathlib
 import time
 
 import numpy as np
+
+# Compass direction → degrees (meteorological: direction wind comes FROM)
+_COMPASS_DEG = {
+    'N': 0, 'NNE': 22, 'NE': 45, 'ENE': 67,
+    'E': 90, 'ESE': 112, 'SE': 135, 'SSE': 157,
+    'S': 180, 'SSW': 202, 'SW': 225, 'WSW': 247,
+    'W': 270, 'WNW': 292, 'NW': 315, 'NNW': 337,
+    'VRB': None,  # variable winds → no arrow
+}
+
+def _compass_to_deg(series) -> list:
+    return [_COMPASS_DEG.get(str(v).strip().upper()) if v and str(v).strip().upper() != 'NAN' else None
+            for v in series]
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -78,6 +91,16 @@ def _safe_list(series) -> list:
 # API endpoints
 # ---------------------------------------------------------------------------
 
+@app.get("/api/debug/columns")
+def api_debug_columns(lat: float, lon: float):
+    """Return the raw DataFrame column names — useful for diagnosing missing fields."""
+    try:
+        df = _get_forecast_df(lat, lon)
+        return {"columns": list(df.columns)}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
 @app.get("/api/forecast")
 def api_forecast(lat: float, lon: float):
     """Return NWS hourly forecast data for a location."""
@@ -116,7 +139,7 @@ def api_forecast(lat: float, lon: float):
             "sky_pct": get_col(sky_col),
             "pop_pct": get_col(pop_col),
             "rh_pct": get_col(rh_col),
-            "wind_dir_deg": get_col(wind_dir_col),
+            "wind_dir_deg": _compass_to_deg(df[wind_dir_col].tolist()) if wind_dir_col else [None] * len(df),
             "is_day": is_day,
         }
         return result

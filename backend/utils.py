@@ -89,7 +89,17 @@ def get_full_forecast(lat, lon):
         df2 = get_48h_hourly_forecast(lat, lon, aheadhour)
         df = pd.concat([df, df2], axis=0)
     df = df[~df.index.duplicated(keep='first')]
+
+    # Wind direction is compass text (e.g. "NW") — preserve it before numeric coercion
+    wind_dir_col = next((c for c in df.columns if 'Wind Dir' in c), None)
+    wind_dir_saved = df[wind_dir_col].copy() if wind_dir_col else None
+
     df = df.apply(pd.to_numeric, errors='coerce')
+
+    # Restore the text wind direction column
+    if wind_dir_col and wind_dir_saved is not None:
+        df[wind_dir_col] = wind_dir_saved
+
     return df
 
 
