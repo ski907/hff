@@ -105,7 +105,7 @@
 
   <!-- ── Footer ── -->
   <footer>
-    <p>Chandler Engel · US Army Corps of Engineers · CRREL</p>
+    <p>Chandler Engel · CRREL</p>
     <p>Physics based on HEC-RAS 5.0 Water Quality Module · Forecast from NOAA NWS</p>
   </footer>
 </div>
