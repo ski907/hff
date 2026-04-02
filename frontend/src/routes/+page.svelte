@@ -70,10 +70,10 @@
         <label for="water-temp">Water Temperature (°C)</label>
         <input id="water-temp" type="number" bind:value={waterTemp} step="0.5" min="-5" max="40" />
       </div>
-      <div class="control-group">
+<!--       <div class="control-group">
         <label for="depth">Characteristic Depth (m)</label>
         <input id="depth" type="number" bind:value={depth} step="0.5" min="0.1" max="100" />
-      </div>
+      </div> -->
       <div class="control-group btn-group">
         <button class="compute-btn" on:click={compute} disabled={loading}>
           {loading ? 'Fetching…' : 'Compute Heat Fluxes'}
