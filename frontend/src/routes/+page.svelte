@@ -6,7 +6,7 @@
 
   let lat = 41.1242;
   let lon = -101.3644;
-  let waterTemp = 10;
+  let waterTemp = 2;
   let depth = 2;
 
   let forecastData = null;
@@ -47,7 +47,7 @@
 <div class="page">
   <!-- ── Header ── -->
   <header>
-    <div class="label">CRREL · Heat Flux Forecast</div>
+    <div class="label">Heat Flux Forecast</div>
     <h1>6.5-Day Heat Flux Forecast</h1>
     <p class="subtitle">
       NOAA hourly forecast · Heat flux from HEC-RAS Water Quality Module
@@ -98,10 +98,10 @@
   {#if heatfluxData}
     <HeatFluxChart data={heatfluxData} />
   {/if}
-
+<!-- 
   {#if forecastData}
     <WindPlot data={forecastData} />
-  {/if}
+  {/if} -->
 
   <!-- ── Footer ── -->
   <footer>

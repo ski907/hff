@@ -156,11 +156,11 @@
   // ── Arrow helper ──────────────────────────────────────────────────────────
   function windArrow(cx, cy, dir) {
     const rad = ((dir + 180) * Math.PI) / 180;
-    const len = 8, headLen = 3.5, headW = 2.5;
+    const len = 14, headLen = 4, headW = 2.5;
     const dx = Math.sin(rad), dy = -Math.cos(rad);
     const px = -dy, py = dx;
-    const tipX = cx + dx * len * 0.5, tipY = cy + dy * len * 0.5;
-    const tailX = cx - dx * len * 0.5, tailY = cy - dy * len * 0.5;
+    const tipX = cx + dx * len, tipY = cy + dy * len;
+    const tailX = cx,           tailY = cy;
     const hbX = tipX - dx * headLen, hbY = tipY - dy * headLen;
     return {
       x1: tailX, y1: tailY, x2: hbX, y2: hbY,
@@ -297,7 +297,7 @@
       <!-- ── Sky cover strip ── -->
       {#each points as p, i}
         {@const bw = Math.max(2, plotW / points.length)}
-        {@const grey = Math.round(255 - ((p.sky ?? 0) / 100) * 200)}
+        {@const grey = Math.round(((p.sky ?? 0) / 100) * 200)}
         <rect
           x={xScale(i) - bw / 2} y={skyY0}
           width={bw + 0.5} height={skyH}

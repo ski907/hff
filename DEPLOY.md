@@ -3,6 +3,9 @@
 This is the FastAPI + SvelteKit rewrite (`svelte-rewrite` branch).
 The legacy Streamlit version lives at `/opt/heatflux/` on the droplet and runs on port 8501.
 
+> **Note:** Always build the frontend locally on Windows and upload the result.
+> The droplet doesn't have enough RAM to run the Vite build — Node.js is not needed on the server.
+
 ---
 
 ## Local development
@@ -25,6 +28,8 @@ Open `http://localhost:5173`
 
 ## Local production build (PowerShell)
 
+To test the full production build locally before deploying:
+
 ```powershell
 cd frontend
 npm install
@@ -44,32 +49,33 @@ Open `http://localhost:8000`
 
 ## DigitalOcean droplet — first-time setup
 
+Node.js is NOT needed on the server. Only Python is required.
+
 SSH into the droplet, then:
 
 ```bash
-# Install Node.js
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
-
 # Install Python + pip
 sudo apt-get install -y python3-pip python3-venv
 
 # Clone the svelte-rewrite branch
 git clone -b svelte-rewrite <your-repo-url> /opt/hff-svelte
-cd /opt/hff-svelte
-
-# Build frontend
-cd frontend
-npm install
-npm run build
-cd ..
-cp -r frontend/build backend/static
 
 # Install Python deps into a venv
-cd backend
+cd /opt/hff-svelte/backend
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+```
+
+**Then from your local Windows machine, upload the built frontend:**
+```powershell
+# Build locally first
+cd frontend
+npm run build
+cd ..
+
+# Upload to server
+scp -r frontend/build root@<your-ip>:/opt/hff-svelte/backend/static
 ```
 
 ### systemd service
@@ -120,14 +126,20 @@ Dashboard → your droplet → **Networking** → **Firewall** → add inbound r
 
 ---
 
-## Updating hff-svelte
+## Deploying updates
 
-```bash
-cd /opt/hff-svelte
-git pull
+```powershell
+# 1. Build frontend locally
+cd frontend
+npm run build
+cd ..
 
-cd frontend && npm run build && cd ..
-cp -r frontend/build backend/static
+# 2. Upload built frontend to server
+scp -r frontend/build root@<your-ip>:/opt/hff-svelte/backend/static
 
-sudo systemctl restart hff-svelte
+# 3. If backend code changed, pull and restart
+ssh root@<your-ip> "cd /opt/hff-svelte && git pull && systemctl restart hff-svelte"
+
+# 4. If only the frontend changed, just restart
+ssh root@<your-ip> "systemctl restart hff-svelte"
 ```

@@ -23,7 +23,7 @@
   onMount(async () => {
     const L = (await import('leaflet')).default;
 
-    map = L.map(mapEl, { zoomControl: true }).setView([lat, lon], 6);
+    map = L.map(mapEl, { zoomControl: true }).setView([lat, lon], 4);
 
     // Dark tile layer (CartoDB Dark Matter)
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
@@ -31,6 +31,7 @@
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
       subdomains: 'abcd',
       maxZoom: 19,
+      className: 'map-tiles',
     }).addTo(map);
 
     marker = L.marker([lat, lon], { icon: makeIcon(L) }).addTo(map);
@@ -57,11 +58,15 @@
 
 <style>
   .map-container {
-    height: 320px;
+    height: 450px;
     width: 100%;
     border-radius: 6px;
     overflow: hidden;
     background: #0d1117;
+  }
+
+  :global(.map-tiles) {
+  filter: brightness(1.6);
   }
 
   /* Leaflet popup/control theme overrides */
