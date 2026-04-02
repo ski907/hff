@@ -74,7 +74,7 @@ cd frontend
 npm run build
 cd ..
 
-# Upload to server
+# Upload to server (static doesn't exist yet on first run, so this is safe)
 scp -r frontend/build root@<your-ip>:/opt/hff-svelte/backend/static
 ```
 
@@ -128,18 +128,23 @@ Dashboard → your droplet → **Networking** → **Firewall** → add inbound r
 
 ## Deploying updates
 
+> **Important:** Always delete `backend/static` on the server before uploading.
+> If `static` already exists, `scp -r` will nest the new build inside it (`static/build/`)
+> instead of replacing it, and the app will serve stale files.
+
 ```powershell
 # 1. Build frontend locally
 cd frontend
 npm run build
 cd ..
 
-# 2. Upload built frontend to server
+# 2. Clear old static files on server, then upload fresh build
+ssh root@<your-ip> "rm -rf /opt/hff-svelte/backend/static"
 scp -r frontend/build root@<your-ip>:/opt/hff-svelte/backend/static
 
-# 3. If backend code changed, pull and restart
-ssh root@<your-ip> "cd /opt/hff-svelte && git pull && systemctl restart hff-svelte"
+# 3. If backend code changed, pull on server too
+ssh root@<your-ip> "cd /opt/hff-svelte && git pull"
 
-# 4. If only the frontend changed, just restart
+# 4. Restart the service
 ssh root@<your-ip> "systemctl restart hff-svelte"
 ```
