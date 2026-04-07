@@ -86,6 +86,7 @@
       temp:     d.temperature_f[i],
       dewpoint: d.dewpoint_f[i],
       wind:     d.wind_mph[i],
+      gust:     d.wind_gust_mph?.[i] ?? null,
       windDir:  d.wind_dir_deg?.[i] ?? null,
       sky:      d.sky_pct[i],
       pop:      d.pop_pct?.[i] ?? 0,
@@ -149,6 +150,7 @@
   })();
 
   $: windLine = linePath(points, xScale, (p) => p.wind != null ? yWind(p.wind) : null);
+  $: gustLine = linePath(points, xScale, (p) => p.gust != null ? yWind(p.gust) : null);
 
   $: windSegments = (() => {
     if (points.length < 2) return [];
@@ -375,6 +377,22 @@
         {/if}
       {/each}
 
+      <!-- Gust extent ticks (vertical lines from wind to gust) -->
+      {#each points as p, i}
+        {#if p.gust != null && p.wind != null && p.gust > p.wind}
+          <line
+            x1={xScale(i)} x2={xScale(i)}
+            y1={yWind(p.gust)} y2={yWind(p.wind)}
+            stroke="#8b949e" stroke-width="1" opacity="0.35"
+          />
+        {/if}
+      {/each}
+
+      <!-- Gust dashed line -->
+      {#if gustLine}
+        <path d={gustLine} fill="none" stroke="#8b949e" stroke-width="1" stroke-dasharray="3,3" opacity="0.5" />
+      {/if}
+
       <text x={pad.left + 6} y={windY0 + 12} fill="#7d8590" font-size="9.5" font-family="'IBM Plex Mono',monospace" font-weight="500" opacity="0.85">WIND mph · Beaufort</text>
 
       <!-- ── Precip probability bars ── -->
@@ -467,6 +485,10 @@
           <span class="tt-val" style="color:{windColor(p.wind)}">{p.wind != null ? p.wind + ' mph' : '—'} {dirLabel(p.windDir)}</span>
           <span class="tt-label" style="color:#484f58">↳</span>
           <span class="tt-val" style="color:#7d8590;font-size:10px">{beaufortLabel(p.wind)}</span>
+          {#if p.gust != null}
+            <span class="tt-label" style="color:#8b949e">Gust</span>
+            <span class="tt-val" style="color:#8b949e">{p.gust} mph</span>
+          {/if}
           <span class="tt-label" style="color:#7d8590">Sky</span>
           <span class="tt-val">{p.sky != null ? p.sky + '%' : '—'}</span>
           <span class="tt-label" style="color:#38ada9">Precip</span>
@@ -501,6 +523,7 @@
       </span>
       <span class="leg-text">Wind (Beaufort: calm→storm)</span>
     </span>
+    <span class="leg-item"><span class="leg-gust"></span><span class="leg-text">Gust</span></span>
     <span class="leg-item"><span class="leg-bar" style="background:#38ada9"></span><span class="leg-text">Precip prob</span></span>
     <span class="leg-item"><span class="leg-strip"></span><span class="leg-text">Sky cover</span></span>
     <span class="leg-item"><span class="leg-day"></span><span class="leg-text">Daylight</span></span>
@@ -610,6 +633,14 @@
     width: 16px;
     height: 0;
     border-top: 2px dashed #8b949e;
+    display: inline-block;
+  }
+
+  .leg-gust {
+    width: 16px;
+    height: 0;
+    border-top: 1.5px dashed #8b949e;
+    opacity: 0.6;
     display: inline-block;
   }
 

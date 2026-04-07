@@ -124,6 +124,7 @@ def api_forecast(lat: float, lon: float):
     pop_col = find_col(["Precip"])
     rh_col = find_col(["Humidity"])
     wind_dir_col = find_col(["Wind Direction", "Wind Dir"])
+    gust_col = find_col(["Gust", "Wind Gust"])
 
     def get_col(col):
         return _safe_list(df[col].tolist()) if col else [None] * len(df)
@@ -136,6 +137,7 @@ def api_forecast(lat: float, lon: float):
             "temperature_f": get_col(temp_col),
             "dewpoint_f": get_col(dew_col),
             "wind_mph": get_col(wind_col),
+            "wind_gust_mph": get_col(gust_col),
             "sky_pct": get_col(sky_col),
             "pop_pct": get_col(pop_col),
             "rh_pct": get_col(rh_col),
